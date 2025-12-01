@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: security_postgres
+    environment:
+      POSTGRES_DB: security_monitor
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - security_net
+
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: security_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - security_net
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: security_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - security_net
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: security_kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - security_net
+
+  # Django Backend
+  django:
+    build:
+      context: ./django-backend
+      dockerfile: Dockerfile
+    container_name: security_django
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./django-backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - DATABASE_HOST=postgres
+      - DATABASE_NAME=security_monitor
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - ELASTICSEARCH_HOST=elasticsearch:9200
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+      - elasticsearch
+    networks:
+      - security_net
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ./django-backend
+      dockerfile: Dockerfile
+    container_name: security_celery_worker
+    command: celery -A backend worker --loglevel=info
+    volumes:
+      - ./django-backend:/app
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_NAME=security_monitor
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - ELASTICSEARCH_HOST=elasticsearch:9200
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - django
+      - redis
+    networks:
+      - security_net
+
+  # Celery Beat (Scheduler)
+  celery_beat:
+    build:
+      context: ./django-backend
+      dockerfile: Dockerfile
+    container_name: security_celery_beat
+    command: celery -A backend beat --loglevel=info
+    volumes:
+      - ./django-backend:/app
+    environment:
+      - DATABASE_HOST=postgres
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      - django
+      - redis
+    networks:
+      - security_net
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+
+networks:
+  security_net:
+    driver: bridge
