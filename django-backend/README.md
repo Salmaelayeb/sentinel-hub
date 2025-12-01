@@ -1,258 +1,240 @@
-# Security Monitoring Platform - Django Backend
+# Security Monitoring Backend - Django REST API
 
-This is the Django REST API backend for the integrated security monitoring platform. It orchestrates security tools like Nmap, OWASP ZAP, OpenVAS, Trivy, Wazuh, and TShark.
+This is the Django backend for the Security Operations Center Dashboard.
 
-## Features
+## Setup Instructions
 
-- **REST API** for security data management
-- **Database models** for vulnerabilities, alerts, scan results, and metrics
-- **Celery tasks** for automated tool execution
-- **Admin interface** for data management
-- **Integration scripts** for security tools
-
-## Prerequisites
-
-- Python 3.10+
-- PostgreSQL 13+
-- Redis (for Celery)
-- Security tools installed:
-  - Nmap
-  - OWASP ZAP
-  - OpenVAS
-  - Trivy
-  - Wireshark/TShark
-  - Wazuh (optional)
-
-## Installation
-
-### 1. Create Virtual Environment
+### 1. Install Dependencies
 
 ```bash
 cd django-backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-### 2. Install Dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configure Database
+### 2. Configure Database
 
-Create PostgreSQL database:
+Make sure PostgreSQL is running and create the database:
 
-```sql
+```bash
+psql -U postgres
 CREATE DATABASE security_monitor;
-CREATE USER postgres WITH PASSWORD 'postgres';
-GRANT ALL PRIVILEGES ON DATABASE security_monitor TO postgres;
+\q
 ```
 
-Update `backend/settings.py` if needed with your database credentials.
+Update database credentials in `backend/settings.py` if needed.
 
-### 4. Run Migrations
+### 3. Run Migrations
 
 ```bash
 python manage.py makemigrations
 python manage.py migrate
 ```
 
-### 5. Create Superuser
+### 4. Create Superuser (Optional)
 
 ```bash
 python manage.py createsuperuser
 ```
 
-### 6. Initialize Security Tools
+### 5. Create Sample Data (Important for testing)
+
+You can create sample data through Django shell:
 
 ```bash
-python scripts/tool_integrations.py init
+python manage.py shell
 ```
 
-### 7. Generate Sample Data (Optional)
+Then in the shell:
 
-```bash
-python scripts/tool_integrations.py sample
+```python
+from security_api.models import SecurityTool, Vulnerability, SecurityAlert
+
+# Create tools
+tools_data = [
+    {'name': 'nmap', 'status': 'active', 'description': 'Network mapper and scanner'},
+    {'name': 'zap', 'status': 'active', 'description': 'OWASP ZAP web scanner'},
+    {'name': 'openvas', 'status': 'inactive', 'description': 'Vulnerability scanner'},
+    {'name': 'trivy', 'status': 'active', 'description': 'Container security scanner'},
+    {'name': 'wazuh', 'status': 'active', 'description': 'SIEM and security monitoring'},
+    {'name': 'wireshark', 'status': 'active', 'description': 'Network protocol analyzer'},
+]
+
+for tool_data in tools_data:
+    SecurityTool.objects.get_or_create(**tool_data)
+
+# Create vulnerabilities
+nmap = SecurityTool.objects.get(name='nmap')
+zap = SecurityTool.objects.get(name='zap')
+
+vulnerabilities = [
+    {
+        'title': 'SQL Injection in login form',
+        'severity': 'critical',
+        'status': 'open',
+        'affected_asset': 'webapp.example.com',
+        'description': 'SQL injection vulnerability in authentication endpoint',
+        'cve_id': 'CVE-2024-1234',
+        'tool': zap
+    },
+    {
+        'title': 'Open SSH port detected',
+        'severity': 'medium',
+        'status': 'open',
+        'affected_asset': '192.168.1.100',
+        'description': 'SSH port 22 is publicly accessible',
+        'tool': nmap
+    },
+]
+
+for vuln in vulnerabilities:
+    Vulnerability.objects.get_or_create(**vuln)
+
+# Create alerts
+alerts = [
+    {
+        'alert_type': 'intrusion',
+        'severity': 'critical',
+        'message': 'Brute force attack detected on SSH',
+        'source': '192.168.1.50',
+        'acknowledged': False,
+        'tool': nmap
+    },
+    {
+        'alert_type': 'vulnerability',
+        'severity': 'high',
+        'message': 'Critical vulnerability discovered',
+        'source': 'webapp.example.com',
+        'acknowledged': False,
+        'tool': zap
+    },
+]
+
+for alert in alerts:
+    SecurityAlert.objects.get_or_create(**alert)
+
+print("Sample data created successfully!")
 ```
 
-## Running the Server
-
-### Development Server
+### 6. Start Backend Server
 
 ```bash
 python manage.py runserver
 ```
 
-API will be available at: `http://localhost:8000/api/`
+The API will be available at `http://localhost:8000/api/`
 
-### Run Celery Worker (for background tasks)
+### 7. Start Frontend
 
-In a separate terminal:
-
-```bash
-celery -A backend worker -l info
-```
-
-### Run Celery Beat (for scheduled tasks)
-
-In another terminal:
+In a separate terminal, from the root directory:
 
 ```bash
-celery -A backend beat -l info
+npm run dev
 ```
+
+The frontend will be available at `http://localhost:5173/` and will automatically connect to the Django backend.
 
 ## API Endpoints
 
 ### Dashboard
 - `GET /api/dashboard/` - Get comprehensive dashboard statistics
 
-### Security Tools
-- `GET /api/tools/` - List all security tools
-- `GET /api/tools/{id}/` - Get tool details
-- `POST /api/tools/{id}/start_scan/` - Start a scan
-- `POST /api/tools/{id}/stop_scan/` - Stop a scan
-
 ### Vulnerabilities
 - `GET /api/vulnerabilities/` - List all vulnerabilities
-- `GET /api/vulnerabilities/{id}/` - Get vulnerability details
+- `GET /api/vulnerabilities/{id}/` - Get specific vulnerability
 - `GET /api/vulnerabilities/by_severity/` - Get counts by severity
 - `GET /api/vulnerabilities/recent/` - Get recent vulnerabilities
-- `POST /api/vulnerabilities/` - Create vulnerability
-- `PUT /api/vulnerabilities/{id}/` - Update vulnerability
-- `DELETE /api/vulnerabilities/{id}/` - Delete vulnerability
 
 ### Alerts
 - `GET /api/alerts/` - List all alerts
-- `GET /api/alerts/{id}/` - Get alert details
-- `POST /api/alerts/{id}/acknowledge/` - Acknowledge alert
 - `GET /api/alerts/unacknowledged/` - Get unacknowledged alerts
+- `POST /api/alerts/{id}/acknowledge/` - Acknowledge an alert
+
+### Security Tools
+- `GET /api/tools/` - List all tools
+- `POST /api/tools/{id}/start_scan/` - Start a scan
+- `POST /api/tools/{id}/stop_scan/` - Stop a scan
+
+### Hosts
+- `GET /api/hosts/` - List all network hosts
 
 ### Scan Results
 - `GET /api/scans/` - List all scan results
-- `GET /api/scans/{id}/` - Get scan details
-
-### Network Hosts
-- `GET /api/hosts/` - List discovered hosts
-- `GET /api/hosts/{id}/` - Get host details
 
 ### Metrics
-- `GET /api/metrics/` - List security metrics
+- `GET /api/metrics/` - List all security metrics
 
-## Filtering & Search
+## Testing the Integration
 
-Most endpoints support filtering and search:
+1. Make sure PostgreSQL is running
+2. Start the Django backend: `python manage.py runserver`
+3. Create sample data using the shell commands above
+4. Start the React frontend: `npm run dev`
+5. Open `http://localhost:5173/` in your browser
+6. You should see real data from the Django backend!
 
-```bash
-# Filter vulnerabilities by severity
-GET /api/vulnerabilities/?severity=critical
+## Optional: Celery for Background Tasks
 
-# Search vulnerabilities
-GET /api/vulnerabilities/?search=sql+injection
+To enable background task processing:
 
-# Filter alerts by type
-GET /api/alerts/?alert_type=intrusion
-
-# Pagination
-GET /api/vulnerabilities/?page=2
-```
-
-## Running Manual Scans
-
-### Nmap Scan
+### 1. Install Redis
 
 ```bash
-python scripts/tool_integrations.py nmap --target 192.168.1.0/24
+# macOS
+brew install redis
+brew services start redis
+
+# Ubuntu/Debian
+sudo apt-get install redis-server
+sudo systemctl start redis
 ```
 
-## Celery Tasks
+### 2. Start Celery Worker
 
-The following background tasks are available:
+```bash
+celery -A backend worker --loglevel=info
+```
 
-- `run_nmap_scan(target, scan_type)` - Execute Nmap scan
-- `run_zap_scan(target_url)` - Execute OWASP ZAP scan
-- `run_trivy_scan(image_name)` - Execute Trivy container scan
-- `aggregate_daily_metrics()` - Aggregate daily metrics
+### 3. Start Celery Beat (for scheduled tasks)
 
-### Trigger tasks manually:
-
-```python
-from security_api.tasks import run_nmap_scan
-
-# Trigger async task
-run_nmap_scan.delay('192.168.1.100', 'basic')
+```bash
+celery -A backend beat --loglevel=info
 ```
 
 ## Admin Interface
 
-Access the admin interface at: `http://localhost:8000/admin/`
+Access the Django admin at `http://localhost:8000/admin/` using your superuser credentials.
 
-Use the superuser credentials you created earlier.
+You can create, edit, and delete data directly from the admin interface.
 
-## Integration with React Frontend
+## CORS Configuration
 
-The React frontend should connect to these endpoints. Update the React app's API base URL to:
+CORS is configured to allow requests from:
+- `http://localhost:5173` (Vite dev server)
+- `http://localhost:8080`
 
-```typescript
-const API_BASE_URL = 'http://localhost:8000/api';
-```
-
-Make sure CORS is properly configured in `backend/settings.py` (already set for `localhost:5173`).
-
-## Production Deployment
-
-### Using Gunicorn
-
-```bash
-pip install gunicorn
-gunicorn backend.wsgi:application --bind 0.0.0.0:8000
-```
-
-### Using Docker (Create Dockerfile)
-
-```dockerfile
-FROM python:3.10-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000"]
-```
-
-## Environment Variables
-
-For production, use environment variables:
-
-```bash
-export SECRET_KEY='your-secret-key'
-export DEBUG=False
-export DATABASE_URL='postgresql://user:pass@localhost/db'
-export ELASTICSEARCH_HOST='elasticsearch:9200'
-```
-
-## Security Notes
-
-- Change `SECRET_KEY` in production
-- Set `DEBUG=False` in production
-- Use strong database passwords
-- Enable HTTPS
-- Configure proper firewall rules
-- Review CORS settings for production domains
+Update `CORS_ALLOWED_ORIGINS` in `backend/settings.py` if you need different origins.
 
 ## Troubleshooting
 
+### Frontend shows "Loading..." forever
+- Check that Django backend is running on port 8000
+- Check browser console for CORS errors
+- Verify you have sample data in the database
+
 ### Database Connection Error
 - Ensure PostgreSQL is running
-- Check database credentials in settings.py
+- Check database credentials in `settings.py`
+- Make sure database `security_monitor` exists
 
-### Celery Not Working
-- Ensure Redis is running
-- Check Celery broker URL
+### CORS errors
+- Verify CORS settings in `backend/settings.py`
+- Make sure `corsheaders` is in INSTALLED_APPS
+- Check that frontend is running on `localhost:5173`
 
-### Tool Execution Fails
-- Ensure security tools are installed and in PATH
-- Check tool permissions
+## Environment Variables
 
-## License
-
-This project is part of the Security Monitoring Platform.
+For production, create a `.env` file based on `.env.example` and update:
+- `SECRET_KEY`
+- `DEBUG=False`
+- Database credentials
+- `ALLOWED_HOSTS`

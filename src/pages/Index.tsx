@@ -3,139 +3,46 @@ import { MetricCard } from "@/components/MetricCard";
 import { VulnerabilityTable } from "@/components/VulnerabilityTable";
 import { AlertFeed } from "@/components/AlertFeed";
 import { ToolStatus } from "@/components/ToolStatus";
+import { useDashboard } from "@/hooks/useDashboard";
+import { useVulnerabilities } from "@/hooks/useVulnerabilities";
+import { useAlerts } from "@/hooks/useAlerts";
+import { useTools } from "@/hooks/useTools";
 
 const Index = () => {
-  // Mock data for demonstration
+  const { data: dashboardStats, isLoading: isDashboardLoading } = useDashboard();
+  const { data: vulnerabilities = [], isLoading: isVulnerabilitiesLoading } = useVulnerabilities();
+  const { data: alerts = [], isLoading: isAlertsLoading } = useAlerts();
+  const { data: tools = [], isLoading: isToolsLoading } = useTools();
+
+  // Metrics based on real data
   const metrics = [
     {
       title: "Critical Vulnerabilities",
-      value: 7,
+      value: dashboardStats?.critical_vulns || 0,
       icon: AlertTriangle,
-      trend: { value: "2 from last scan", isPositive: false },
+      trend: { value: `${dashboardStats?.total_vulnerabilities || 0} total`, isPositive: false },
       severity: "critical" as const,
     },
     {
       title: "Active Threats",
-      value: 23,
+      value: dashboardStats?.high_vulns || 0,
       icon: Shield,
-      trend: { value: "5 from yesterday", isPositive: false },
+      trend: { value: `${dashboardStats?.unacknowledged_alerts || 0} unacknowledged`, isPositive: false },
       severity: "high" as const,
     },
     {
       title: "Systems Monitored",
-      value: 156,
+      value: dashboardStats?.hosts_discovered || 0,
       icon: Network,
       severity: "info" as const,
     },
     {
-      title: "Security Score",
-      value: "72%",
+      title: "Active Tools",
+      value: dashboardStats?.active_tools || 0,
       icon: Lock,
-      trend: { value: "3% from last week", isPositive: true },
+      trend: { value: `${tools.length} configured`, isPositive: true },
       severity: "medium" as const,
     },
-  ];
-
-  const vulnerabilities = [
-    {
-      id: "CVE-2024-1234",
-      name: "SQL Injection in Login Form",
-      severity: "critical" as const,
-      tool: "OWASP ZAP",
-      target: "webapp.example.com",
-      cvss: 9.8,
-      status: "open" as const,
-    },
-    {
-      id: "CVE-2024-5678",
-      name: "Outdated OpenSSL Version",
-      severity: "high" as const,
-      tool: "OpenVAS",
-      target: "10.0.1.45",
-      cvss: 8.2,
-      status: "investigating" as const,
-    },
-    {
-      id: "CVE-2024-9012",
-      name: "Container Image Vulnerability",
-      severity: "high" as const,
-      tool: "Trivy",
-      target: "nginx:latest",
-      cvss: 7.5,
-      status: "open" as const,
-    },
-    {
-      id: "NMAP-001",
-      name: "Open Port 22 (SSH)",
-      severity: "medium" as const,
-      tool: "Nmap",
-      target: "10.0.1.67",
-      cvss: 5.3,
-      status: "investigating" as const,
-    },
-    {
-      id: "CVE-2024-3456",
-      name: "XSS in Search Parameter",
-      severity: "medium" as const,
-      tool: "OWASP ZAP",
-      target: "api.example.com",
-      cvss: 6.1,
-      status: "resolved" as const,
-    },
-  ];
-
-  const alerts = [
-    {
-      id: "1",
-      title: "Brute force attack detected on SSH port",
-      timestamp: "2 minutes ago",
-      severity: "critical" as const,
-      source: "Wazuh SIEM",
-    },
-    {
-      id: "2",
-      title: "New vulnerability discovered in production server",
-      timestamp: "15 minutes ago",
-      severity: "high" as const,
-      source: "OpenVAS",
-    },
-    {
-      id: "3",
-      title: "Suspicious network traffic pattern detected",
-      timestamp: "32 minutes ago",
-      severity: "medium" as const,
-      source: "Wireshark",
-    },
-    {
-      id: "4",
-      title: "Security scan completed successfully",
-      timestamp: "1 hour ago",
-      severity: "info" as const,
-      source: "Nmap",
-    },
-    {
-      id: "5",
-      title: "Container image updated with patches",
-      timestamp: "2 hours ago",
-      severity: "low" as const,
-      source: "Trivy",
-    },
-    {
-      id: "6",
-      title: "Multiple failed login attempts",
-      timestamp: "3 hours ago",
-      severity: "high" as const,
-      source: "Wazuh SIEM",
-    },
-  ];
-
-  const tools = [
-    { name: "Wazuh SIEM", status: "active" as const, lastScan: "Live", findings: 23 },
-    { name: "OpenVAS", status: "active" as const, lastScan: "10 min ago", findings: 12 },
-    { name: "OWASP ZAP", status: "idle" as const, lastScan: "1 hour ago", findings: 8 },
-    { name: "Nmap", status: "active" as const, lastScan: "5 min ago", findings: 45 },
-    { name: "Trivy", status: "idle" as const, lastScan: "30 min ago", findings: 6 },
-    { name: "Wireshark", status: "active" as const, lastScan: "Live", findings: 156 },
   ];
 
   return (
@@ -171,17 +78,35 @@ const Index = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Vulnerability Table - spans 2 columns */}
           <div className="lg:col-span-2">
-            <VulnerabilityTable vulnerabilities={vulnerabilities} />
+            {isVulnerabilitiesLoading ? (
+              <div className="glass-effect rounded-lg p-8 text-center">
+                <p className="text-muted-foreground">Loading vulnerabilities...</p>
+              </div>
+            ) : (
+              <VulnerabilityTable vulnerabilities={vulnerabilities} />
+            )}
           </div>
 
           {/* Alert Feed - spans 1 column */}
           <div className="lg:col-span-1">
-            <AlertFeed alerts={alerts} />
+            {isAlertsLoading ? (
+              <div className="glass-effect rounded-lg p-8 text-center">
+                <p className="text-muted-foreground">Loading alerts...</p>
+              </div>
+            ) : (
+              <AlertFeed alerts={alerts} />
+            )}
           </div>
         </div>
 
         {/* Tool Status */}
-        <ToolStatus tools={tools} />
+        {isToolsLoading ? (
+          <div className="glass-effect rounded-lg p-8 text-center">
+            <p className="text-muted-foreground">Loading tools...</p>
+          </div>
+        ) : (
+          <ToolStatus tools={tools} />
+        )}
       </div>
     </div>
   );
