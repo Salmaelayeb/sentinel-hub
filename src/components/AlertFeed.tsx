@@ -2,20 +2,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, Shield, Activity } from "lucide-react";
-
-interface Alert {
-  id: string;
-  title: string;
-  timestamp: string;
-  severity: "critical" | "high" | "medium" | "low" | "info";
-  source: string;
-}
+import { Alert, useAcknowledgeAlert } from "@/hooks/useAlerts";
 
 interface AlertFeedProps {
   alerts: Alert[];
 }
 
 export const AlertFeed = ({ alerts }: AlertFeedProps) => {
+  const { mutate: acknowledgeAlert } = useAcknowledgeAlert();
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
       case "critical":
@@ -49,21 +43,38 @@ export const AlertFeed = ({ alerts }: AlertFeedProps) => {
             return (
               <div
                 key={alert.id}
-                className={`p-4 rounded-lg border ${getSeverityColor(alert.severity)} transition-all hover:scale-[1.02]`}
+                className={`p-4 rounded-lg border ${getSeverityColor(alert.severity)} transition-all hover:scale-[1.02] ${
+                  alert.acknowledged ? 'opacity-50' : ''
+                }`}
               >
                 <div className="flex items-start gap-3">
                   <Icon className="h-5 w-5 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-sm">{alert.title}</p>
+                      <p className="font-semibold text-sm">{alert.message}</p>
                       <Badge variant="outline" className="text-xs shrink-0">
                         {alert.severity}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                      <span className="font-mono">{alert.source}</span>
-                      <span>•</span>
-                      <span>{alert.timestamp}</span>
+                    <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">{alert.source}</span>
+                        <span>•</span>
+                        <Badge variant="outline" className="text-xs">
+                          {alert.alert_type}
+                        </Badge>
+                      </div>
+                      {!alert.acknowledged && (
+                        <button
+                          onClick={() => acknowledgeAlert(alert.id)}
+                          className="text-primary hover:underline ml-2"
+                        >
+                          Acknowledge
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {new Date(alert.created_at).toLocaleString()}
                     </div>
                   </div>
                 </div>
