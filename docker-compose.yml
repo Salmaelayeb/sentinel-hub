@@ -1,7 +1,6 @@
-version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database - Primary data storage
   postgres:
     image: postgres:15-alpine
     container_name: security_postgres
@@ -15,8 +14,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - security_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
-  # Redis for Celery
+  # Redis - Message broker for Celery
   redis:
     image: redis:7-alpine
     container_name: security_redis
@@ -24,8 +29,14 @@ services:
       - "6379:6379"
     networks:
       - security_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
-  # Elasticsearch
+  # Elasticsearch - Search engine and log storage
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     container_name: security_elasticsearch
@@ -40,8 +51,15 @@ services:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
       - security_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
 
-  # Kibana
+  # Kibana - Visualization dashboard
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
     container_name: security_kibana
@@ -50,17 +68,21 @@ services:
     ports:
       - "5601:5601"
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     networks:
       - security_net
+    restart: unless-stopped
 
-  # Django Backend
+  # Django Backend - Main application
   django:
     build:
       context: ./django-backend
       dockerfile: Dockerfile
     container_name: security_django
-    command: python manage.py runserver 0.0.0.0:8000
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./django-backend:/app
     ports:
@@ -71,22 +93,27 @@ services:
       - DATABASE_NAME=security_monitor
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
+      - DATABASE_PORT=5432
       - ELASTICSEARCH_HOST=elasticsearch:9200
       - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
-      - postgres
-      - redis
-      - elasticsearch
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     networks:
       - security_net
+    restart: unless-stopped
 
-  # Celery Worker
+  # Celery Worker - Background task processor
   celery_worker:
     build:
       context: ./django-backend
       dockerfile: Dockerfile
     container_name: security_celery_worker
-    command: celery -A backend worker --loglevel=info
+    command: celery -A backend worker --loglevel=info --concurrency=4
     volumes:
       - ./django-backend:/app
     environment:
@@ -94,35 +121,74 @@ services:
       - DATABASE_NAME=security_monitor
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
+      - DATABASE_PORT=5432
       - ELASTICSEARCH_HOST=elasticsearch:9200
       - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
-      - django
-      - redis
+      django:
+        condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - security_net
+    restart: unless-stopped
 
-  # Celery Beat (Scheduler)
+  # grafana -monitoring and visualization tool 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - security_net
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  # Kali Linux - Security Tools Container
+  kali:
+    image: kalilinux/kali-rolling
+    container_name: kali-tools
+    networks:
+      - security_net
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./scans:/root/scans  # Mount folder to save scan results
+      - ./scripts:/root/scripts  # Mount folder for your custom scripts
+    command: tail -f /dev/null  # Keep container running
+
+  # Celery Beat - Task scheduler
   celery_beat:
     build:
       context: ./django-backend
       dockerfile: Dockerfile
     container_name: security_celery_beat
-    command: celery -A backend beat --loglevel=info
+    command: celery -A backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
       - ./django-backend:/app
     environment:
       - DATABASE_HOST=postgres
+      - DATABASE_NAME=security_monitor
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_PORT=5432
       - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
-      - django
-      - redis
+      django:
+        condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - security_net
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+    driver: local
   elasticsearch_data:
+    driver: local
+  grafana-data:
+
 
 networks:
   security_net:

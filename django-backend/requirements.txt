@@ -1,12 +1,31 @@
+# Core Django Framework
 Django==5.0.0
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
-psycopg2-binary==2.9.9
-python-nmap==0.7.1
+
+# Database Drivers
+psycopg2-binary==2.9.11
+
+# Celery - Background Task Processing
 celery==5.3.4
+django-celery-beat==2.6.0
 redis==5.0.1
+
+# Elasticsearch - Search Engine
 elasticsearch==8.11.0
+
+# Security Tool Integrations
+python-nmap==0.7.1
+python-gvm==23.11.0
+
+# HTTP Requests
 requests==2.31.0
+
+# Utilities
 python-dateutil==2.8.2
 pyyaml==6.0.1
-python-gvm==23.11.0
+python-dotenv==1.0.0
+
+# Development & Debugging (optional but helpful)
+ipython==8.18.1
+django-extensions==3.2.3
