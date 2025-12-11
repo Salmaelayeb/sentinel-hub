@@ -19,8 +19,8 @@ st.markdown("""
 
 def fetch_data(endpoint):
     try:
-        response = requests.get(f"{API_URL}/{endpoint}", timeout=5)
-        return response.json() if response.status_code == 200 else None
+        vulnerabilities = requests.get("http://localhost:8000/api/vulnerabilities/").json()
+        st.dataframe(vulnerabilities)
     except:
         return None
 

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     SecurityTool, Vulnerability, SecurityAlert, 
-    ScanResult, NetworkHost, SecurityMetric
+    ScanResult, NetworkHost, SecurityMetric ,ScanSchedule
 )
 
 
@@ -46,6 +46,12 @@ class SecurityMetricSerializer(serializers.ModelSerializer):
         model = SecurityMetric
         fields = '__all__'
 
+class ScanScheduleSerializer(serializers.ModelSerializer):
+    tool_name = serializers.CharField(source='tool.get_name_display', read_only=True)
+    
+    class Meta:
+        model = ScanSchedule
+        fields = '__all__'
 
 class DashboardStatsSerializer(serializers.Serializer):
     """Serializer for dashboard statistics"""

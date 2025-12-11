@@ -132,6 +132,7 @@ services:
     networks:
       - security_net
     restart: unless-stopped
+   
 
   # grafana -monitoring and visualization tool 
   grafana:

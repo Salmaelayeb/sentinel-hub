@@ -10,7 +10,7 @@ router.register(r'scans', views.ScanResultViewSet)
 router.register(r'hosts', views.NetworkHostViewSet)
 router.register(r'metrics', views.SecurityMetricViewSet)
 router.register(r'dashboard', views.DashboardViewSet, basename='dashboard')
-
+router.register(r'scan-schedules', views.ScanScheduleViewSet, basename='scan-schedule')
 urlpatterns = [
     path('', include(router.urls)),
 ]

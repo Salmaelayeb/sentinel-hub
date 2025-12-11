@@ -4,6 +4,7 @@ Django settings for security monitoring backend.
 
 from pathlib import Path
 import os
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -134,12 +135,30 @@ ELASTICSEARCH_HOST = os.getenv('ELASTICSEARCH_HOST', 'localhost:9200')
 # Celery Configuration
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # ADD THIS LINE
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
-
+# Celery Beat Schedule
+CELERY_BEAT_SCHEDULE = {
+    # Check for scheduled scans every minute
+    'trigger-scheduled-scans': {
+        'task': 'security_api.tasks.trigger_scheduled_scans',
+        'schedule': crontab(minute='*'),  # Every minute
+    },
+    'trigger-hourly-scans': {
+        'task': 'security_api.tasks.trigger_hourly_scans',
+        'schedule': crontab(minute=0),  # Every hour
+    },
+    # Example: Run a specific Nmap scan daily at 2 AM
+    'daily-network-scan': {
+        'task': 'security_api.tasks.execute_tool_scan',
+        'schedule': crontab(hour=2, minute=0),
+        'args': ('nmap', '192.168.1.0/24', 'standard', 0)
+    },
+}
 
 
 # Logging Configuration

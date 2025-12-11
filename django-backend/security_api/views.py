@@ -5,16 +5,63 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from .models import (
     SecurityTool, Vulnerability, SecurityAlert, 
-    ScanResult, NetworkHost, SecurityMetric
+    ScanResult, NetworkHost, SecurityMetric ,ScanSchedule
 )
 from .serializers import (
     SecurityToolSerializer, VulnerabilitySerializer,
     SecurityAlertSerializer, ScanResultSerializer,
     NetworkHostSerializer, SecurityMetricSerializer,
-    DashboardStatsSerializer
+    DashboardStatsSerializer ,ScanScheduleSerializer
 )
 
 
+class ScanScheduleViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing scan schedules"""
+    queryset = ScanSchedule.objects.all()
+    serializer_class = ScanScheduleSerializer 
+    filterset_fields = ['tool', 'is_active', 'frequency']
+    
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        """Enable/disable a schedule"""
+        schedule = self.get_object()
+        schedule.is_active = not schedule.is_active
+        schedule.save()
+        return Response({
+            'message': f"Schedule {'activated' if schedule.is_active else 'deactivated'}",
+            'is_active': schedule.is_active
+        })
+    
+    @action(detail=True, methods=['post'])
+    def run_now(self, request, pk=None):
+        """Trigger a scheduled scan immediately"""
+        schedule = self.get_object()
+        
+        scan_result = ScanResult.objects.create(
+            tool=schedule.tool,
+            target=schedule.target,
+            scan_type=schedule.scan_type,
+            status='pending'
+        )
+        
+        execute_tool_scan.delay(
+            schedule.tool.name,
+            schedule.target,
+            schedule.scan_type,
+            scan_result.id
+        )
+        
+        return Response({
+            'message': 'Scan triggered immediately',
+            'scan_result_id': scan_result.id
+        }, status=status.HTTP_202_ACCEPTED)
+    
+    @action(detail=False, methods=['get'])
+    def active_schedules(self, request):
+        """Get all active schedules"""
+        schedules = ScanSchedule.objects.filter(is_active=True)
+        serializer = self.get_serializer(schedules, many=True)
+        return Response(serializer.data)
 class SecurityToolViewSet(viewsets.ModelViewSet):
     """API endpoint for security tools"""
     queryset = SecurityTool.objects.all()

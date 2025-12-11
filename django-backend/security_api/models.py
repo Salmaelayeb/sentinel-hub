@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django_celery_beat.models import PeriodicTask, CrontabSchedule
 
 
 class SecurityTool(models.Model):
@@ -168,6 +169,27 @@ class SecurityMetric(models.Model):
         indexes = [
             models.Index(fields=['metric_type', '-timestamp']),
         ]
-    
+  
     def __str__(self):
         return f"{self.metric_name}: {self.value} - {self.timestamp}"
+
+class ScanSchedule(models.Model):
+    """Model for scheduling recurring scans"""
+    FREQUENCY_CHOICES = [
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+        ('hourly', 'Every Hour'),
+    ]
+    
+    tool = models.ForeignKey(SecurityTool, on_delete=models.CASCADE)
+    target = models.CharField(max_length=255)
+    scan_type = models.CharField(max_length=100)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
+    is_active = models.BooleanField(default=True)
+    next_run = models.DateTimeField(null=True, blank=True)
+    last_run = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.tool.name} - {self.target} ({self.frequency})"
