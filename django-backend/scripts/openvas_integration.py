@@ -50,14 +50,17 @@ class OpenVASScanner:
                 # Authenticate
                 gmp.authenticate(self.username, self.password)
                 
-                # Create target
+                 # Create target
                 target_name = f"target_{int(time.time())}"
                 target_response = gmp.create_target(
                     name=target_name,
-                    hosts=[target]
+                    hosts=target
                 )
+
                 target_id = target_response.get('id')
-                
+                if not target_id:
+                    raise Exception("Failed to create target")
+
                 # Get scan config
                 configs = gmp.get_scan_configs()
                 config_id = None
@@ -65,23 +68,23 @@ class OpenVASScanner:
                     if config.find('name').text == scan_config:
                         config_id = config.get('id')
                         break
-                
+
                 if not config_id:
-                    print(f"Config '{scan_config}' not found, using default")
                     config_id = configs.find('config').get('id')
-                
-                # Create and start task
-                task_name = f"scan_{target}_{int(time.time())}"
+
+                # Get scanner
+                scanners = gmp.get_scanners()
+                scanner_id = scanners.find('scanner').get('id')
+
+                # Create task
                 task_response = gmp.create_task(
                     name=task_name,
                     config_id=config_id,
                     target_id=target_id,
-                    scanner_id='08b69003-5fc2-4037-a479-93b440211c73'  # Default scanner
+                    scanner_id=scanner_id
                 )
-                task_id = task_response.get('id')
-                
-                print(f"Task created: {task_id}")
-                
+
+                                
                 # Start the task
                 gmp.start_task(task_id)
                 

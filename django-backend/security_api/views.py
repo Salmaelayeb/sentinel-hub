@@ -13,7 +13,7 @@ from .serializers import (
     NetworkHostSerializer, SecurityMetricSerializer,
     DashboardStatsSerializer ,ScanScheduleSerializer
 )
-
+from .tasks import execute_tool_scan 
 
 class ScanScheduleViewSet(viewsets.ModelViewSet):
     """ViewSet for managing scan schedules"""
@@ -71,23 +71,43 @@ class SecurityToolViewSet(viewsets.ModelViewSet):
     def start_scan(self, request, pk=None):
         """Trigger a scan for a specific tool"""
         tool = self.get_object()
+        target = request.data.get('target', '')
+        scan_type = request.data.get('scan_type', 'basic')
         tool.status = 'scanning'
         tool.save()
         
-        # Here you would trigger the actual tool execution
-        # using Celery tasks or subprocess
+        if not target:
+            return Response(
+                {'error': 'Target is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
+         # Create ScanResult record
+        scan_result = ScanResult.objects.create(
+            tool=tool,
+            target=target,
+            scan_type=scan_type,
+            status='queued',
+            start_time=timezone.now())
+    
+        tool.status = 'scanning'
+        tool.save()
+    
+    # Trigger Celery task
+        execute_tool_scan.delay(tool.name, target, scan_type, scan_result.id)
+    
         return Response({
             'status': 'scan_started',
             'tool': tool.name,
-            'message': f'{tool.get_name_display()} scan initiated'
-        })
+            'scan_result_id': scan_result.id,
+            'message': f'{tool.get_name_display()} scan initiated on {target}'
+    })
     
     @action(detail=True, methods=['post'])
     def stop_scan(self, request, pk=None):
         """Stop a running scan"""
         tool = self.get_object()
-        tool.status = 'inactive'
+        tool.status = 'active'
         tool.save()
         
         return Response({

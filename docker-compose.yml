@@ -157,7 +157,21 @@ services:
       - ./scans:/root/scans  # Mount folder to save scan results
       - ./scripts:/root/scripts  # Mount folder for your custom scripts
     command: tail -f /dev/null  # Keep container running
-
+  # OpenVAS - Vulnerability Scanner
+  gvm:
+    image: securecompliance/gvm:latest
+    container_name: openvas
+    ports:
+      - "9392:9392"
+      - "9390:9390"
+    environment:
+      - USERNAME=admin
+      - PASSWORD=admin
+    volumes:
+      - openvas_data:/data
+    networks:
+      - security_net
+    restart: unless-stopped
   # Celery Beat - Task scheduler
   celery_beat:
     build:
@@ -189,6 +203,7 @@ volumes:
   elasticsearch_data:
     driver: local
   grafana-data:
+  openvas_data:
 
 
 networks:
