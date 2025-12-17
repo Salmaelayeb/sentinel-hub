@@ -20,10 +20,6 @@ import {
   transformVulnerability,
   transformAlert,
   transformDashboardStats,
-  fallbackTools,
-  fallbackVulnerabilities,
-  fallbackAlerts,
-  mockDashboardStats,
 } from "@/lib/security-data";
 import { 
   Shield, 
@@ -33,7 +29,8 @@ import {
   Bug,
   Radar,
   Wifi,
-  WifiOff
+  WifiOff,
+  AlertCircle
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
@@ -42,7 +39,7 @@ import heroBg from "@/assets/hero-bg.jpg";
 
 export default function Dashboard() {
   // ============================================================
-  // API Data Hooks
+  // API Data Hooks - All data comes from real backend
   // ============================================================
   
   const { 
@@ -77,42 +74,53 @@ export default function Dashboard() {
   // Connection Status
   // ============================================================
   
-  const isConnected = apiStats !== null && apiStats !== undefined && !statsError;
+  const isConnected = !statsError && !toolsError && apiStats !== null;
+  const isLoading = statsLoading || toolsLoading || alertsLoading || vulnsLoading;
 
   // ============================================================
-  // Data Transformation & Fallback Logic
+  // Data Transformation - Real data only, no fallbacks
   // ============================================================
   
   const stats = useMemo(() => {
     if (apiStats && apiStats.total_vulnerabilities !== undefined) {
       return transformDashboardStats(apiStats);
     }
-    return mockDashboardStats;
+    return {
+      totalVulnerabilities: 0,
+      criticalCount: 0,
+      highCount: 0,
+      mediumCount: 0,
+      lowCount: 0,
+      activeAlerts: 0,
+      activeScans: 0,
+      toolsOnline: 0,
+      totalTools: 0,
+    };
   }, [apiStats]);
 
   const tools = useMemo(() => {
     if (apiTools && Array.isArray(apiTools) && apiTools.length > 0) {
       return apiTools.map(transformTool);
     }
-    return fallbackTools;
+    return [];
   }, [apiTools]);
 
   const alerts = useMemo(() => {
     if (apiAlerts && Array.isArray(apiAlerts) && apiAlerts.length > 0) {
       return apiAlerts.map(transformAlert);
     }
-    return fallbackAlerts;
+    return [];
   }, [apiAlerts]);
 
   const vulnerabilities = useMemo(() => {
     if (apiVulnerabilities && Array.isArray(apiVulnerabilities) && apiVulnerabilities.length > 0) {
       return apiVulnerabilities.map(transformVulnerability);
     }
-    return fallbackVulnerabilities;
+    return [];
   }, [apiVulnerabilities]);
 
   // ============================================================
-  // Chart Data Computation
+  // Chart Data Computation - From real data
   // ============================================================
   
   const severityChartData = useMemo(() => [
@@ -123,7 +131,6 @@ export default function Dashboard() {
   ], [stats]);
 
   const toolChartData = useMemo(() => {
-    // Group vulnerabilities by tool
     const toolCounts: Record<string, number> = {};
     vulnerabilities.forEach(v => {
       const toolName = v.tool;
@@ -136,17 +143,14 @@ export default function Dashboard() {
     }));
   }, [vulnerabilities]);
 
-  // Trend data: vulnerabilities by date and severity
   const trendData = useMemo(() => {
     const days: { date: string; critical: number; high: number; medium: number; low: number }[] = [];
     
-    // Last 7 days
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       
-      // Count vulnerabilities discovered on this date
       const dayVulns = vulnerabilities.filter(v => {
         const vulnDate = new Date(v.discoveredAt);
         return vulnDate.toDateString() === date.toDateString();
@@ -168,21 +172,15 @@ export default function Dashboard() {
   // ============================================================
   
   const handleAcknowledgeAlert = (alertId: string) => {
-    if (isConnected) {
-      acknowledgeAlert.mutate(Number(alertId));
-    }
+    acknowledgeAlert.mutate(Number(alertId));
   };
 
   const handleStartScan = (toolId: string, target: string, scanType: string) => {
-    if (isConnected) {
-      startScan.mutate({ toolId: Number(toolId), target, scanType });
-    }
+    startScan.mutate({ toolId: Number(toolId), target, scanType });
   };
 
   const handleStopScan = (toolId: string) => {
-    if (isConnected) {
-      stopScan.mutate(Number(toolId));
-    }
+    stopScan.mutate(Number(toolId));
   };
 
   // ============================================================
@@ -197,10 +195,9 @@ export default function Dashboard() {
   
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <DashboardHeader alertCount={unacknowledgedCount} />
       
-      {/* Hero Section with Background */}
+      {/* Hero Section */}
       <div className="relative overflow-hidden border-b border-border">
         <div 
           className="absolute inset-0 opacity-30"
@@ -218,29 +215,46 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            {/* Title Section */}
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl md:text-3xl font-bold text-foreground">
                 Security Operations <span className="text-primary">Dashboard</span>
               </h2>
               <Badge 
                 variant={isConnected ? "default" : "secondary"}
-                className={isConnected ? "bg-green-500/20 text-green-700 border-green-500/30" : "bg-muted text-muted-foreground"}
+                className={isConnected ? "bg-green-500/20 text-green-700 border-green-500/30" : "bg-destructive/20 text-destructive border-destructive/30"}
               >
                 {isConnected ? (
                   <><Wifi className="h-3 w-3 mr-1" /> Live</>
                 ) : (
-                  <><WifiOff className="h-3 w-3 mr-1" /></>
+                  <><WifiOff className="h-3 w-3 mr-1" /> Disconnected</>
                 )}
               </Badge>
             </div>
             
-            {/* Subtitle */}
             <p className="text-muted-foreground max-w-2xl">
               {isConnected 
-                ? `Real-time monitoring connected  - ${stats.totalVulnerabilities} vulnerabilities detected`
-                : ''}
+                ? `Real-time monitoring - ${stats.totalVulnerabilities} vulnerabilities detected`
+                : 'Backend not connected. Start the Django server to see real data.'}
             </p>
+
+            {/* Connection Error Alert */}
+            {!isConnected && !isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 p-4 rounded-lg border border-destructive/30 bg-destructive/10"
+              >
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                  <div>
+                    <p className="font-medium text-destructive">Backend Connection Required</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Start your Django backend server at <code className="bg-muted px-1 rounded">http://localhost:8000</code> to display real security data from your integrated tools.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Metric Cards */}
@@ -269,7 +283,7 @@ export default function Dashboard() {
             />
             <MetricCard
               title="Tools Online"
-              value={`${tools.filter(t => t.status === 'active').length}/${tools.length}`}
+              value={tools.length > 0 ? `${tools.filter(t => t.status === 'active').length}/${tools.length}` : '0/0'}
               icon={Server}
               variant="success"
               isLoading={toolsLoading}
@@ -281,7 +295,6 @@ export default function Dashboard() {
       {/* Main Content */}
       <div className="container py-8 px-4">
         <Tabs defaultValue="overview" className="space-y-6">
-          {/* Tab Navigation */}
           <TabsList className="bg-secondary/50 border border-border">
             <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Shield className="mr-2 h-4 w-4" />
@@ -300,20 +313,14 @@ export default function Dashboard() {
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Charts - 2 columns */}
               <div className="lg:col-span-2">
                 <VulnerabilityCharts
                   severityData={severityChartData}
-                  toolData={toolChartData.length > 0 ? toolChartData : [
-                    { name: 'Nmap', vulnerabilities: 0 },
-                    { name: 'OWASP ZAP', vulnerabilities: 0 },
-                    { name: 'Trivy', vulnerabilities: 0 },
-                  ]}
+                  toolData={toolChartData}
                   trendData={trendData}
                 />
               </div>
 
-              {/* Alerts Feed - 1 column */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-foreground">Recent Alerts</h3>
@@ -331,7 +338,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Recent Vulnerabilities Table */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-foreground">Recent Vulnerabilities</h3>
               <VulnerabilitiesTable vulnerabilities={vulnerabilities} isLoading={vulnsLoading} />
@@ -344,22 +350,34 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-lg font-semibold text-foreground">Security Tools</h3>
                 <p className="text-sm text-muted-foreground">
-                  Launch scans and manage your security toolkit
+                  {tools.length > 0 
+                    ? `${tools.filter(t => t.status === 'active').length} of ${tools.length} tools online`
+                    : 'Connect to backend to manage security tools'}
                 </p>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {tools.map((tool) => (
-                <ToolCard 
-                  key={tool.id} 
-                  tool={tool}
-                  onStartScan={handleStartScan}
-                  onStopScan={handleStopScan}
-                  isLoading={toolsLoading}
-                />
-              ))}
-            </div>
+            {tools.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {tools.map((tool) => (
+                  <ToolCard 
+                    key={tool.id} 
+                    tool={tool}
+                    onStartScan={handleStartScan}
+                    onStopScan={handleStopScan}
+                    isLoading={toolsLoading}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border bg-card p-8 text-center">
+                <Server className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No security tools available</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">
+                  Start the backend server and initialize tools to begin scanning
+                </p>
+              </div>
+            )}
           </TabsContent>
 
           {/* Vulnerabilities Tab */}
@@ -375,14 +393,13 @@ export default function Dashboard() {
             
             <VulnerabilitiesTable vulnerabilities={vulnerabilities} isLoading={vulnsLoading} />
             
-            <VulnerabilityCharts
-              severityData={severityChartData}
-              toolData={toolChartData.length > 0 ? toolChartData : [
-                { name: 'Nmap', vulnerabilities: 0 },
-                { name: 'OWASP ZAP', vulnerabilities: 0 },
-              ]}
-              trendData={trendData}
-            />
+            {vulnerabilities.length > 0 && (
+              <VulnerabilityCharts
+                severityData={severityChartData}
+                toolData={toolChartData}
+                trendData={trendData}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>
@@ -391,11 +408,11 @@ export default function Dashboard() {
       <footer className="border-t border-border bg-card/50 py-6">
         <div className="container px-4 text-center">
           <p className="text-sm text-muted-foreground">
-            SentinelHub Security Operations Center • 
+            SecOpsHub Security Operations Center • 
             <span className="font-mono ml-2">
               {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
             </span>
-            {isConnected && <span className="ml-2 text-green-600">● Connected </span>}
+            {isConnected && <span className="ml-2 text-green-600">● Connected</span>}
           </p>
         </div>
       </footer>
