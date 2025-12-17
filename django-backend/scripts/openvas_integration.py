@@ -77,12 +77,17 @@ class OpenVASScanner:
                 scanner_id = scanners.find('scanner').get('id')
 
                 # Create task
+                task_name = f"scan_{target}_{int(time.time())}"
                 task_response = gmp.create_task(
                     name=task_name,
                     config_id=config_id,
                     target_id=target_id,
                     scanner_id=scanner_id
                 )
+                
+                task_id = task_response.get('id')
+                if not task_id:
+                    raise Exception("Failed to create task")
 
                                 
                 # Start the task
