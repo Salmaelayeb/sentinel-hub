@@ -57,7 +57,7 @@ export const ToolStatus = ({ tools }: ToolStatusProps) => {
                 </button>
               ) : (
                 <button
-                  onClick={() => startScan(tool.id)}
+                  onClick={() => startScan({ toolId: tool.id, target: 'localhost', scanType: 'basic' })}
                   className="text-xs px-2 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 flex items-center gap-1"
                   disabled={tool.status === 'error'}
                 >

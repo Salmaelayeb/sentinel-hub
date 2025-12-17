@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 
-interface MetricCardProps {
+export interface MetricCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
@@ -11,6 +11,7 @@ interface MetricCardProps {
   trendValue?: string;
   variant?: 'default' | 'critical' | 'warning' | 'success' | 'info';
   className?: string;
+  isLoading?: boolean;
 }
 
 const variantStyles = {
@@ -47,7 +48,8 @@ export function MetricCard({
   subtitle, 
   icon: Icon, 
   variant = 'default',
-  className 
+  className,
+  isLoading = false
 }: MetricCardProps) {
   const styles = variantStyles[variant];
 
@@ -66,9 +68,13 @@ export function MetricCard({
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="text-3xl font-bold font-mono tracking-tight text-foreground">
-            {value}
-          </p>
+          {isLoading ? (
+            <div className="h-9 w-20 bg-muted animate-pulse rounded" />
+          ) : (
+            <p className="text-3xl font-bold font-mono tracking-tight text-foreground">
+              {value}
+            </p>
+          )}
           {subtitle && (
             <p className="text-xs text-muted-foreground">{subtitle}</p>
           )}

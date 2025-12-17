@@ -26,7 +26,8 @@ export const useStartScan = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (toolId: number) => securityApi.startScan(toolId),
+    mutationFn: ({ toolId, target, scanType }: { toolId: number; target: string; scanType: string }) => 
+      securityApi.startScan(toolId, target, scanType),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tools'] });
       toast({
